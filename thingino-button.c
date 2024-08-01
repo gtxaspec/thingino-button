@@ -28,11 +28,18 @@ typedef struct {
 	double time;
 } Config;
 
+typedef struct {
+	struct timeval press_time;
+	Config *config;
+} TimedFireEntry;
+
 Config configs[MAX_CONFIGS];
 int config_count = 0;
 char input_device[256] = DEFAULT_DEVICE;
-int silent_mode = 0; // Global variable for silent mode
-int daemon_mode = 0; // Global variable for daemon mode
+
+// Global variables
+int silent_mode = 0;
+int daemon_mode = 0;
 
 struct input_event {
 	struct timeval time;
@@ -42,12 +49,11 @@ struct input_event {
 };
 
 typedef struct {
-	struct timeval press_time;
-	int active;
-	Config *config;
-} TimedFire;
+	TimedFireEntry entries[MAX_CONFIGS];
+	int count;
+} TimedFireList;
 
-TimedFire timed_fires[256] = {0};
+TimedFireList timed_fires[256] = {0};
 
 void log_message(const char *format, ...) {
 	va_list args;
@@ -62,7 +68,7 @@ void log_message(const char *format, ...) {
 	va_end(args);
 }
 
-// Support 0-9 and ENTER
+// Support 0-9, MINUS, and ENTER
 int event_code_from_name(const char *name) {
 	switch (name[4]) { // name' is in the format "KEY_X" where X is a character
 		case 'E':
@@ -201,20 +207,19 @@ void process_events(int fd) {
 			if (ev.type == EV_KEY) {
 				// log_message("Key event: code %d, value %d\n", ev.code, ev.value);
 				if (ev.value == 1) { // Key press
-					int timed_action_found = 0;
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_PRESS) == 0) {
 							log_message("PRESS command for key %d: %s\n", ev.code, config->command);
 							execute_command(config->command);
-						} else if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED) == 0 && !timed_action_found) {
+						} else if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED) == 0) {
 							gettimeofday(&press_times[ev.code], NULL);
 							// log_message("Press time recorded for key code %d\n", ev.code);
-							timed_action_found = 1;
 						} else if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED_FIRE) == 0) {
-							gettimeofday(&timed_fires[ev.code].press_time, NULL);
-							timed_fires[ev.code].active = 1;
-							timed_fires[ev.code].config = config;
+							TimedFireEntry entry = {0};
+							gettimeofday(&entry.press_time, NULL);
+							entry.config = config;
+							timed_fires[ev.code].entries[timed_fires[ev.code].count++] = entry;
 							log_message("TIMED_FIRE started for key %d\n", ev.code);
 						}
 					}
@@ -260,13 +265,20 @@ void process_events(int fd) {
 		struct timeval now;
 		gettimeofday(&now, NULL);
 		for (int i = 0; i < 256; i++) {
-			if (timed_fires[i].active) {
-				double elapsed = (now.tv_sec - timed_fires[i].press_time.tv_sec) +
-								(now.tv_usec - timed_fires[i].press_time.tv_usec) / 1000000.0;
-				if (elapsed >= timed_fires[i].config->time) {
-					log_message("TIMED_FIRE command for key %d: %s (elapsed %f seconds)\n", i, timed_fires[i].config->command, elapsed);
-					execute_command(timed_fires[i].config->command);
-					timed_fires[i].active = 0;
+			for (int j = 0; j < timed_fires[i].count; j++) {
+				TimedFireEntry *entry = &timed_fires[i].entries[j];
+				double elapsed = (now.tv_sec - entry->press_time.tv_sec) +
+								(now.tv_usec - entry->press_time.tv_usec) / 1000000.0;
+				if (elapsed >= entry->config->time) {
+					log_message("TIMED_FIRE command for key %d: %s (elapsed %f seconds)\n", i, entry->config->command, elapsed);
+					execute_command(entry->config->command);
+
+					// Remove the entry after execution
+					for (int k = j; k < timed_fires[i].count - 1; k++) {
+						timed_fires[i].entries[k] = timed_fires[i].entries[k + 1];
+					}
+					timed_fires[i].count--;
+					j--; // Adjust index to check the next entry
 				}
 			}
 		}
