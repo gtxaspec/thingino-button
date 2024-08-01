@@ -89,6 +89,9 @@ int event_code_from_name(const char *name) {
 		case '0':
 			if (strcmp(name, "KEY_0") == 0) return 11;
 			break;
+		case 'M':
+			if (strcmp(name, "KEY_MINUS") == 0) return 12;
+			break;
 		default:
 			break;
 	}
