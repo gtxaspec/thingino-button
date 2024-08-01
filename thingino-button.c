@@ -208,6 +208,7 @@ void process_events(int fd) {
 			if (ev.type == EV_KEY) {
 				// log_message("Key event: code %d, value %d\n", ev.code, ev.value);
 				if (ev.value == 1) { // Key press
+					log_message("TIMED_FIRE detected key %d\n", ev.code);
 					gettimeofday(&press_times[ev.code], NULL);
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
@@ -223,7 +224,7 @@ void process_events(int fd) {
 							entry.config = config;
 							entry.active = 1;
 							timed_fires[ev.code].entries[timed_fires[ev.code].count++] = entry;
-							log_message("TIMED_FIRE started for key %d\n", ev.code);
+							// log_message("TIMED_FIRE started for key %d\n", ev.code);
 						}
 					}
 				} else if (ev.value == 0) { // Key release
