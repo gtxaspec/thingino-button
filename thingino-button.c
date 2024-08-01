@@ -208,6 +208,7 @@ void process_events(int fd) {
 			if (ev.type == EV_KEY) {
 				// log_message("Key event: code %d, value %d\n", ev.code, ev.value);
 				if (ev.value == 1) { // Key press
+					gettimeofday(&press_times[ev.code], NULL);
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_PRESS) == 0) {
@@ -230,25 +231,25 @@ void process_events(int fd) {
 					gettimeofday(&release_time, NULL);
 					double hold_time = (release_time.tv_sec - press_times[ev.code].tv_sec) +
 									(release_time.tv_usec - press_times[ev.code].tv_usec) / 1000000.0;
-
 					// log_message("Key %d held for %f seconds\n", ev.code, hold_time);
-					double max_time = 0.0;
-					int max_time_index = -1;
+					// Find and execute the longest TIMED command that fits within the hold time
+					double max_time = 0;
+					Config *selected_config = NULL;
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED) == 0) {
 							if (hold_time >= config->time && config->time > max_time) {
 								max_time = config->time;
-								max_time_index = i;
+								selected_config = config;
 							}
 						}
 					}
-					if (max_time_index != -1) {
-						Config *config = &configs[max_time_index];
-						log_message("TIMED command for key %d: %s (held for %f seconds)\n", ev.code, config->command, hold_time);
-						execute_command(config->command);
+					if (selected_config) {
+						log_message("TIMED command for key %d: %s (held for %f seconds)\n", ev.code, selected_config->command, hold_time);
+						execute_command(selected_config->command);
 					}
 
+					// Execute RELEASE commands
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_RELEASE) == 0) {
