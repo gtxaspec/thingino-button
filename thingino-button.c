@@ -18,11 +18,12 @@
 #define ACTION_PRESS "PRESS"
 #define ACTION_RELEASE "RELEASE"
 #define ACTION_TIMED "TIMED"
+#define ACTION_TIMED_FIRE "TIMED_FIRE"
 #define EV_KEY 0x01
 
 typedef struct {
 	int key_code;
-	char action[10];
+	char action[20];
 	char command[256];
 	double time;
 } Config;
@@ -39,6 +40,14 @@ struct input_event {
 	uint16_t code;
 	int32_t value;
 };
+
+typedef struct {
+	struct timeval press_time;
+	int active;
+	Config *config;
+} TimedFire;
+
+TimedFire timed_fires[256] = {0};
 
 void log_message(const char *format, ...) {
 	va_list args;
@@ -110,7 +119,6 @@ void load_config() {
 		// Remove trailing newline character from the line
 		line[strcspn(line, "\n")] = '\0';
 
-		// Remove trailing newline character from the line
 		if (strlen(line) == 0 || line[0] == '#') {
 			continue;
 		}
@@ -122,7 +130,7 @@ void load_config() {
 			char key[20], action[20], command[256];
 			double time = 0.0;
 
-			int parsed = sscanf(line, "%19s %9s %[^\n]", key, action, command);
+			int parsed = sscanf(line, "%19s %19s %[^\n]", key, action, command);
 			if (parsed >= 3) {
 				char *last_space = strrchr(command, ' ');
 				if (last_space && (isdigit(*(last_space + 1)) || *(last_space + 1) == '.')) {
@@ -158,7 +166,6 @@ void load_config() {
 	}
 	fclose(file);
 }
-
 
 void execute_command(const char *command) {
 	pid_t pid = fork();
@@ -198,12 +205,17 @@ void process_events(int fd) {
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_PRESS) == 0) {
-							log_message("Executing PRESS command for key %d: %s\n", ev.code, config->command);
+							log_message("PRESS command for key %d: %s\n", ev.code, config->command);
 							execute_command(config->command);
 						} else if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED) == 0 && !timed_action_found) {
 							gettimeofday(&press_times[ev.code], NULL);
 							// log_message("Press time recorded for key code %d\n", ev.code);
 							timed_action_found = 1;
+						} else if (ev.code == config->key_code && strcmp(config->action, ACTION_TIMED_FIRE) == 0) {
+							gettimeofday(&timed_fires[ev.code].press_time, NULL);
+							timed_fires[ev.code].active = 1;
+							timed_fires[ev.code].config = config;
+							log_message("TIMED_FIRE started for key %d\n", ev.code);
 						}
 					}
 				} else if (ev.value == 0) { // Key release
@@ -211,8 +223,8 @@ void process_events(int fd) {
 					gettimeofday(&release_time, NULL);
 					double hold_time = (release_time.tv_sec - press_times[ev.code].tv_sec) +
 									(release_time.tv_usec - press_times[ev.code].tv_usec) / 1000000.0;
-					// log_message("Key %d held for %f seconds\n", ev.code, hold_time);
 
+					// log_message("Key %d held for %f seconds\n", ev.code, hold_time);
 					double max_time = 0.0;
 					int max_time_index = -1;
 					for (int i = 0; i < config_count; i++) {
@@ -226,14 +238,14 @@ void process_events(int fd) {
 					}
 					if (max_time_index != -1) {
 						Config *config = &configs[max_time_index];
-						log_message("Executing TIMED command for key %d: %s (held for %f seconds)\n", ev.code, config->command, hold_time);
+						log_message("TIMED command for key %d: %s (held for %f seconds)\n", ev.code, config->command, hold_time);
 						execute_command(config->command);
 					}
 
 					for (int i = 0; i < config_count; i++) {
 						Config *config = &configs[i];
 						if (ev.code == config->key_code && strcmp(config->action, ACTION_RELEASE) == 0) {
-							log_message("Executing RELEASE command for key %d: %s\n", ev.code, config->command);
+							log_message("RELEASE command for key %d: %s\n", ev.code, config->command);
 							execute_command(config->command);
 						}
 					}
@@ -243,6 +255,22 @@ void process_events(int fd) {
 			perror("Error reading event");
 			break;
 		}
+
+		// Check for timed fire events
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		for (int i = 0; i < 256; i++) {
+			if (timed_fires[i].active) {
+				double elapsed = (now.tv_sec - timed_fires[i].press_time.tv_sec) +
+								(now.tv_usec - timed_fires[i].press_time.tv_usec) / 1000000.0;
+				if (elapsed >= timed_fires[i].config->time) {
+					log_message("TIMED_FIRE command for key %d: %s (elapsed %f seconds)\n", i, timed_fires[i].config->command, elapsed);
+					execute_command(timed_fires[i].config->command);
+					timed_fires[i].active = 0;
+				}
+			}
+		}
+
 		usleep(10000); // Sleep for 10ms to reduce CPU usage
 	}
 }
