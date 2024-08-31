@@ -137,14 +137,16 @@ void load_config() {
 			char key[20], action[20], command[256];
 			double time = 0.0;
 
-			int parsed = sscanf(line, "%19s %19s %[^\n]", key, action, command);
-			if (parsed >= 3) {
-				char *last_space = strrchr(command, ' ');
-				if (last_space && (isdigit(*(last_space + 1)) || *(last_space + 1) == '.')) {
-					time = atof(last_space + 1);
-					*last_space = '\0';
-				}
+			// Try to parse with time value
+			int parsed = sscanf(line, "%19s %19s %lf %[^\n]", key, action, &time, command);
 
+			// If time was not found, parse without it
+			if (parsed < 4) {
+				time = 0.0; // Default time if not provided
+				parsed = sscanf(line, "%19s %19s %[^\n]", key, action, command);
+			}
+
+			if (parsed >= 3) {
 				config.key_code = event_code_from_name(key);
 				if (config.key_code == -1) {
 					log_message("Invalid key code: %s\n", key);
@@ -158,8 +160,8 @@ void load_config() {
 				config.time = time;
 
 				// Debug output for parsed config
-				log_message("Loaded config: key_code=%d, action=%s, command=%s, time=%f\n",
-							config.key_code, config.action, config.command, config.time);
+				log_message("Loaded config: key_code=%d, action=%s, time=%f, command=%s\n",
+							config.key_code, config.action, config.time, config.command);
 
 				configs[config_count++] = config;
 				if (config_count >= MAX_CONFIGS) {
@@ -174,6 +176,7 @@ void load_config() {
 	fclose(file);
 }
 
+
 void execute_command(const char *command) {
 	pid_t pid = fork();
 	if (pid < 0) {
@@ -182,7 +185,7 @@ void execute_command(const char *command) {
 	}
 	if (pid == 0) {
 		// Debug output for command execution
-		// log_message("Executing command: %s\n", command);
+		log_message("Executing command: [%s]\n", command);
 
 		// Execute command using shell
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);

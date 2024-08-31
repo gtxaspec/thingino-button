@@ -40,13 +40,13 @@
    DEVICE=/dev/input/event0
 
    # Key action mappings
-   # Format: KEY_<key_name> <action> <command> [<time>]
-   KEY_ENTER PRESS /bin/command1
-   KEY_ENTER RELEASE /bin/command2 
-   KEY_ENTER TIMED /bin/command-timed press 0.1
-   KEY_ENTER TIMED /bin/command-timed 3
-   KEY_ENTER TIMED /bin/command-timed 5
-   KEY_ENTER TIMED /bin/command-timed 20
+   # Format: KEY_<key_name> <action> <time> <command>
+   KEY_ENTER PRESS 0 /bin/command1
+   KEY_ENTER RELEASE 0 /bin/command2
+   KEY_ENTER TIMED 0.1 /bin/command-timed press
+   KEY_ENTER TIMED 3 /bin/command-timed
+   KEY_ENTER TIMED 5 /bin/command-timed
+   KEY_ENTER TIMED 20 /bin/command-timed
    ```
 
 2. **Run the Program:**
@@ -74,19 +74,19 @@ The configuration file should be located at `/etc/thingino-button.conf` and foll
 DEVICE=/dev/input/event0
 
 # Key action mappings
-# Format: KEY_<key_name> <action> <command> [<time>]
+# Format: KEY_<key_name> <action> <time> <command>
 # - <key_name>: Name of the key (e.g., ENTER, 1, 2, etc.)
-# - <action>: Type of action (PRESS, RELEASE, TIMED)
+# - <action>: Type of action (PRESS, RELEASE, TIMED, TIMED_FIRE)
+# - <time>: Time in seconds for TIMED, TIMED_FIRE actions (use 0 for PRESS and RELEASE)
 # - <command>: Command to execute when the action occurs
-# - [<time>]: (Optional) Time in seconds for TIMED actions
 
 # Example mappings:
-KEY_ENTER PRESS /bin/command1
-KEY_ENTER RELEASE /bin/command2
-KEY_ENTER TIMED /bin/command-timed press 0.1
-KEY_ENTER TIMED /bin/command-timed 3
-KEY_ENTER TIMED /bin/command-timed 5
-KEY_ENTER TIMED /bin/command-timed 20
+KEY_ENTER PRESS 0 /bin/command1
+KEY_ENTER RELEASE 0 /bin/command2
+KEY_ENTER TIMED 0.1 /bin/command-timed press
+KEY_ENTER TIMED 3 /bin/command-timed
+KEY_ENTER TIMED 5 /bin/command-timed
+KEY_ENTER TIMED 20 /bin/command-timed
 ```
 
 ## Contributing
